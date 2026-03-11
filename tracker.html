@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>캐릭터 작업 트래커 (최종 수정판)</title>
+    <title>캐릭터 작업 트래커 (버그 박멸판)</title>
     <style>
         :root { --primary: #1a73e8; --bg: #f0f2f5; --white: #ffffff; }
         body { font-family: 'Malgun Gothic', sans-serif; padding: 20px; background-color: var(--bg); color: #333; margin: 0; }
@@ -57,7 +57,7 @@
     <div class="controls">
         <button class="btn-add" onclick="addColumn()">+ 캐릭터 추가</button>
         <button class="btn-add" onclick="addRow()">+ 키워드 추가</button>
-        <button class="btn-reset" onclick="resetAll()">초기화</button>
+        <button class="btn-reset" onclick="resetAll()">초기화(데이터 꼬임 방지)</button>
     </div>
 
     <div class="table-wrapper">
@@ -69,24 +69,29 @@
 </div>
 
 <script>
-    const STORAGE_KEY = 'omni_tracker_v5_final';
+    const STORAGE_KEY = 'omni_tracker_v6_final';
     
-    // 초기 상태
     let state = {
         chars: [
-            { id: Date.now() + 1, name: 'el' },
-            { id: Date.now() + 2, name: 'rin' }
+            { id: 1, name: 'el' },
+            { id: 2, name: 'rin' }
         ],
         keywords: [
-            { id: Date.now() + 10, name: 'basic', desc: '기본 상태' },
-            { id: Date.now() + 11, name: 'happy', desc: '웃음' }
+            { id: 101, name: 'basic', desc: '기본 상태' },
+            { id: 102, name: 'happy', desc: '웃음' }
         ],
-        checks: {} // 키: "kwId-charId"
+        checks: {}
     };
 
     function init() {
         const saved = localStorage.getItem(STORAGE_KEY);
-        if (saved) state = JSON.parse(saved);
+        if (saved) {
+            try {
+                state = JSON.parse(saved);
+            } catch(e) {
+                console.error("데이터 복구 실패, 초기화합니다.");
+            }
+        }
         render();
     }
 
@@ -99,10 +104,11 @@
         const headerRow = document.getElementById('headerRow');
         const tableBody = document.getElementById('tableBody');
 
-        // 헤더
+        // 헤더 렌더링
         headerRow.innerHTML = '<th class="sticky-col">키워드</th><th class="desc-col">설명</th>';
         state.chars.forEach(char => {
             const th = document.createElement('th');
+            // 여기서 char.name을 직접 사용
             th.innerHTML = `
                 <input class="input-edit" value="${char.name}" onchange="editChar(${char.id}, this.value)">
                 <button class="del-btn" onclick="removeColumn(${char.id})">✖</button>
@@ -110,7 +116,7 @@
             headerRow.appendChild(th);
         });
 
-        // 본문
+        // 본문 렌더링
         tableBody.innerHTML = '';
         state.keywords.forEach(kw => {
             const tr = document.createElement('tr');
@@ -125,14 +131,15 @@
             `;
 
             state.chars.forEach(char => {
-                const checkId = `${kw.id}-${char.id}`;
-                const isChecked = state.checks[checkId] ? 'checked' : '';
-                const tag = `${char.name}${kw.name}`;
+                const checkKey = `${kw.id}-${char.id}`;
+                const isChecked = state.checks[checkKey] ? 'checked' : '';
+                // 버그 수정 포인트: char 자체가 아니라 char.name과 kw.name을 합칩니다.
+                const tagName = String(char.name) + String(kw.name);
                 
                 rowHtml += `
                     <td>
-                        <input type="checkbox" ${isChecked} onchange="toggleCheck('${checkId}', this.checked)">
-                        <span class="tag-display">${tag}</span>
+                        <input type="checkbox" ${isChecked} onchange="toggleCheck('${checkKey}', this.checked)">
+                        <span class="tag-display">${tagName}</span>
                     </td>`;
             });
             tr.innerHTML = rowHtml;
@@ -142,19 +149,19 @@
     }
 
     function editChar(id, val) {
-        const char = state.chars.find(c => c.id === id);
-        if (char) char.name = val.trim();
+        const target = state.chars.find(c => c.id === id);
+        if (target) target.name = val.trim() || 'name';
         save(); render();
     }
 
     function editKw(id, field, val) {
-        const kw = state.keywords.find(k => k.id === id);
-        if (kw) kw[field] = val.trim();
+        const target = state.keywords.find(k => k.id === id);
+        if (target) target[field] = val.trim() || 'name';
         save(); render();
     }
 
-    function toggleCheck(id, val) {
-        state.checks[id] = val;
+    function toggleCheck(key, val) {
+        state.checks[key] = val;
         save();
     }
 
@@ -169,14 +176,14 @@
     }
     
     function removeColumn(id) {
-        if(confirm('삭제할까요?')) {
+        if(confirm('삭제하시겠습니까?')) {
             state.chars = state.chars.filter(c => c.id !== id);
             save(); render();
         }
     }
 
     function removeRow(id) {
-        if(confirm('삭제할까요?')) {
+        if(confirm('삭제하시겠습니까?')) {
             state.keywords = state.keywords.filter(k => k.id !== id);
             save(); render();
         }
@@ -184,13 +191,14 @@
 
     function updateProgress() {
         const total = state.chars.length * state.keywords.length;
-        const checked = Object.entries(state.checks).filter(([key, val]) => {
-            // 현재 존재하는 행/열의 체크만 계산
-            const [kwId, charId] = key.split('-').map(Number);
-            return val === true && 
-                   state.keywords.some(k => k.id === kwId) && 
-                   state.chars.some(c => c.id === charId);
-        }).length;
+        let checked = 0;
+        
+        // 현재 존재하는 키워드와 캐릭터 조합에 대해서만 체크 카운트
+        state.keywords.forEach(kw => {
+            state.chars.forEach(char => {
+                if(state.checks[`${kw.id}-${char.id}`]) checked++;
+            });
+        });
 
         const percent = total > 0 ? Math.round((checked / total) * 100) : 0;
         document.getElementById('progressBar').style.width = percent + '%';
@@ -200,7 +208,7 @@
     }
 
     function resetAll() {
-        if(confirm('모든 데이터를 초기화할까요?')) {
+        if(confirm('모든 데이터가 초기화됩니다. 데이터가 꼬였을 때 유용합니다. 진행할까요?')) {
             localStorage.removeItem(STORAGE_KEY);
             location.reload();
         }
