@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>캐릭터 작업 트래커</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; background-color: #f5f5f5; }
+        .container { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        h2 { border-bottom: 2px solid #333; padding-bottom: 10px; }
+        
+        /* 설정 영역 */
+        .settings { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px; padding: 15px; background: #eee; border-radius: 5px; }
+        .char-input { display: flex; flex-direction: column; gap: 5px; }
+        .char-input label { font-size: 12px; font-weight: bold; }
+        .char-input input { width: 60px; padding: 5px; text-align: center; border: 1px solid #ccc; }
+
+        /* 테이블 영역 */
+        .table-wrapper { overflow-x: auto; margin-top: 20px; }
+        table { border-collapse: collapse; width: 100%; min-width: 800px; background: white; }
+        th, td { border: 1px solid #ddd; padding: 10px; text-align: center; }
+        th { background-color: #f8f9fa; position: sticky; top: 0; }
+        .keyword-col { font-weight: bold; background: #fffde7; text-align: left; }
+        
+        /* 요약 영역 */
+        .summary { margin-top: 20px; padding: 15px; background: #e3f2fd; border-radius: 5px; display: flex; gap: 20px; }
+        .progress-bar { height: 10px; background: #ccc; border-radius: 5px; overflow: hidden; width: 200px; margin-top: 5px; }
+        .progress-fill { height: 100%; background: #4caf50; width: 0%; transition: width 0.3s; }
+
+        .tag-display { font-size: 11px; color: #666; display: block; margin-top: 4px; }
+        input[type="checkbox"] { transform: scale(1.2); cursor: pointer; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>캐릭터 작업 트래커</h2>
+
+    <div class="settings" id="charSettings">
+        </div>
+
+    <div class="summary">
+        <div>
+            <strong>전체 진행률:</strong> <span id="totalPercent">0%</span>
+            <div class="progress-bar"><div class="progress-fill" id="totalBar"></div></div>
+        </div>
+        <div>
+            <strong>완료 항목:</strong> <span id="doneCount">0</span> / <span id="totalCount">0</span>
+        </div>
+    </div>
+
+    <div class="table-wrapper">
+        <table>
+            <thead>
+                <tr id="tableHeader">
+                    <th>키워드</th>
+                    <th>설명</th>
+                    </tr>
+            </thead>
+            <tbody id="trackerBody">
+                </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    // 기본 키워드 데이터
+    const keywords = [
+        { id: 'basic', name: 'basic', desc: '변화 없는 기본 상태' },
+        { id: 'happy', name: 'happy', desc: '크게 웃음, 밝은 음성' },
+        { id: 'smile', name: 'smile', desc: '옅은 미소, 부드러운 입꼬리' },
+        { id: 'shy', name: 'shy', desc: '수줍음, 설렘' },
+        { id: 'angry', name: 'angry', desc: '분노, 위압, 화남' },
+        { id: 'flustered', name: 'flustered', desc: '당황, 놀람' },
+        { id: 'thinking', name: 'thinking', desc: '신중함, 고민' }
+    ];
+
+    const charCount = 8; // 캐릭터 수 (원하는 만큼 수정 가능)
+    let charInitials = Array(charCount).fill('').map((_, i) => `c${i+1}`);
+
+    // 초기화 함수
+    function init() {
+        renderSettings();
+        renderTable();
+        updateDisplay();
+    }
+
+    // 캐릭터 이니셜 입력창 생성
+    function renderSettings() {
+        const settingsDiv = document.getElementById('charSettings');
+        settingsDiv.innerHTML = '<strong>캐릭터 이니셜: </strong>';
+        charInitials.forEach((initial, i) => {
+            const div = document.createElement('div');
+            div.className = 'char-input';
+            div.innerHTML = `
+                <label>캐릭${i+1}</label>
+                <input type="text" value="${initial}" oninput="updateInitial(${i}, this.value)">
+            `;
+            settingsDiv.appendChild(div);
+        });
+    }
+
+    // 테이블 생성
+    function renderTable() {
+        const header = document.getElementById('tableHeader');
+        const body = document.getElementById('trackerBody');
+        
+        // 헤더 생성
+        for(let i=0; i < charCount; i++) {
+            const th = document.createElement('th');
+            th.id = `header-char-${i}`;
+            th.innerText = `캐릭${i+1}`;
+            header.appendChild(th);
+        }
+
+        // 행 생성
+        keywords.forEach(kw => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `<td class="keyword-col">${kw.name}</td><td>${kw.desc}</td>`;
+            
+            for(let i=0; i < charCount; i++) {
+                const td = document.createElement('td');
+                td.innerHTML = `
+                    <input type="checkbox" class="chk" data-char="${i}" data-kw="${kw.id}" onchange="updateDisplay()">
+                    <span class="tag-display" id="tag-${kw.id}-${i}">${charInitials[i]}${kw.id}</span>
+                `;
+                tr.appendChild(td);
+            }
+            body.appendChild(tr);
+        });
+    }
+
+    // 이니셜 수정 시 실시간 반영
+    function updateInitial(index, value) {
+        charInitials[index] = value;
+        document.getElementById(`header-char-${index}`).innerText = value || `캐릭${index+1}`;
+        
+        keywords.forEach(kw => {
+            const tagSpan = document.getElementById(`tag-${kw.id}-${index}`);
+            tagSpan.innerText = `${value}${kw.id}`;
+        });
+    }
+
+    // 체크박스 상태에 따른 요약 업데이트
+    function updateDisplay() {
+        const checkboxes = document.querySelectorAll('.chk');
+        const total = checkboxes.length;
+        const checked = document.querySelectorAll('.chk:checked').length;
+        const percent = total > 0 ? Math.round((checked / total) * 100) : 0;
+
+        document.getElementById('totalCount').innerText = total;
+        document.getElementById('doneCount').innerText = checked;
+        document.getElementById('totalPercent').innerText = percent + '%';
+        document.getElementById('totalBar').style.width = percent + '%';
+    }
+
+    init();
+</script>
+
+</body>
+</html>
