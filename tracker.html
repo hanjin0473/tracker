@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>커스텀 캐릭터 트래커 (완성형)</title>
+    <title>캐릭터 작업 트래커 (최종 수정판)</title>
     <style>
         :root { --primary: #1a73e8; --bg: #f0f2f5; --white: #ffffff; }
         body { font-family: 'Malgun Gothic', sans-serif; padding: 20px; background-color: var(--bg); color: #333; margin: 0; }
@@ -24,7 +24,7 @@
 
         .table-wrapper { overflow: auto; border: 1px solid #eee; border-radius: 8px; max-height: 75vh; }
         table { border-collapse: collapse; width: 100%; table-layout: fixed; }
-        th, td { border: 1px solid #eee; padding: 12px 8px; text-align: center; min-width: 120px; position: relative; }
+        th, td { border: 1px solid #eee; padding: 12px 8px; text-align: center; min-width: 130px; position: relative; }
         th { background: #f8f9fa; position: sticky; top: 0; z-index: 10; border-bottom: 2px solid #ddd; }
         
         .sticky-col { position: sticky; left: 0; background: #fffde7 !important; z-index: 11; font-weight: bold; width: 140px; }
@@ -32,7 +32,7 @@
 
         .input-edit { width: 90%; border: 1px solid transparent; background: transparent; text-align: center; padding: 6px; border-radius: 4px; font-weight: inherit; font-size: inherit; }
         .input-edit:hover { border-color: #ccc; background: #fff; }
-        .input-edit:focus { border-color: var(--primary); background: #fff; outline: none; box-shadow: 0 0 0 2px rgba(26,115,232,0.2); }
+        .input-edit:focus { border-color: var(--primary); background: #fff; outline: none; }
         
         .del-btn { position: absolute; top: 2px; right: 2px; font-size: 12px; color: #ccc; cursor: pointer; border: none; background: none; opacity: 0; transition: 0.2s; }
         th:hover .del-btn, td:hover .del-btn { opacity: 1; }
@@ -48,7 +48,7 @@
     <header>
         <h2>🎨 작업 트래커</h2>
         <div class="summary">
-            <span style="font-size: 14px; font-weight: bold; white-space: nowrap;"><span id="percentText">0%</span> 완료</span>
+            <span style="font-size: 14px; font-weight: bold; white-space: nowrap;"><span id="percentText">0%</span></span>
             <div class="progress-bar"><div class="progress-fill" id="progressBar"></div></div>
             <span style="font-size: 12px; color: #666; white-space: nowrap;">(<span id="doneCount">0</span>/<span id="totalCount">0</span>)</span>
         </div>
@@ -61,26 +61,27 @@
     </div>
 
     <div class="table-wrapper">
-        <table id="mainTable">
-            <thead>
-                <tr id="headerRow"></tr>
-            </thead>
+        <table>
+            <thead><tr id="headerRow"></tr></thead>
             <tbody id="tableBody"></tbody>
         </table>
     </div>
 </div>
 
 <script>
-    const STORAGE_KEY = 'omni_tracker_v4_final';
+    const STORAGE_KEY = 'omni_tracker_v5_final';
     
+    // 초기 상태
     let state = {
-        chars: ['캐릭1', '캐릭2', '캐릭3'],
-        keywords: [
-            { name: 'basic', desc: '기본 상태' },
-            { name: 'happy', desc: '웃음, 밝은 음성' },
-            { name: 'smile', desc: '옅은 미소' }
+        chars: [
+            { id: Date.now() + 1, name: 'el' },
+            { id: Date.now() + 2, name: 'rin' }
         ],
-        checks: {}
+        keywords: [
+            { id: Date.now() + 10, name: 'basic', desc: '기본 상태' },
+            { id: Date.now() + 11, name: 'happy', desc: '웃음' }
+        ],
+        checks: {} // 키: "kwId-charId"
     };
 
     function init() {
@@ -98,42 +99,40 @@
         const headerRow = document.getElementById('headerRow');
         const tableBody = document.getElementById('tableBody');
 
-        // 1. 헤더 렌더링
-        let headerHtml = `<th class="sticky-col">키워드</th><th class="desc-col">설명</th>`;
-        state.chars.forEach((name, idx) => {
-            headerHtml += `
-                <th>
-                    <input class="input-edit" value="${name}" onchange="editChar(${idx}, this.value)">
-                    <button class="del-btn" onclick="removeColumn(${idx})">✖</button>
-                </th>`;
+        // 헤더
+        headerRow.innerHTML = '<th class="sticky-col">키워드</th><th class="desc-col">설명</th>';
+        state.chars.forEach(char => {
+            const th = document.createElement('th');
+            th.innerHTML = `
+                <input class="input-edit" value="${char.name}" onchange="editChar(${char.id}, this.value)">
+                <button class="del-btn" onclick="removeColumn(${char.id})">✖</button>
+            `;
+            headerRow.appendChild(th);
         });
-        headerRow.innerHTML = headerHtml;
 
-        // 2. 본문 렌더링
+        // 본문
         tableBody.innerHTML = '';
-        state.keywords.forEach((kw, kwIdx) => {
+        state.keywords.forEach(kw => {
             const tr = document.createElement('tr');
-            
             let rowHtml = `
                 <td class="sticky-col">
-                    <input class="input-edit" value="${kw.name}" onchange="editKw(${kwIdx}, 'name', this.value)">
-                    <button class="del-btn" onclick="removeRow(${kwIdx})">✖</button>
+                    <input class="input-edit" value="${kw.name}" onchange="editKw(${kw.id}, 'name', this.value)">
+                    <button class="del-btn" onclick="removeRow(${kw.id})">✖</button>
                 </td>
                 <td class="desc-col">
-                    <input class="input-edit" style="text-align:left;" value="${kw.desc}" onchange="editKw(${kwIdx}, 'desc', this.value)">
+                    <input class="input-edit" style="text-align:left;" value="${kw.desc}" onchange="editKw(${kw.id}, 'desc', this.value)">
                 </td>
             `;
 
-            state.chars.forEach((charName, charIdx) => {
-                const checkId = `check-${kwIdx}-${charIdx}`;
+            state.chars.forEach(char => {
+                const checkId = `${kw.id}-${char.id}`;
                 const isChecked = state.checks[checkId] ? 'checked' : '';
-                // 이니셜과 키워드를 결합한 태그 생성
-                const tag = `${charName}${kw.name}`;
+                const tag = `${char.name}${kw.name}`;
                 
                 rowHtml += `
                     <td>
                         <input type="checkbox" ${isChecked} onchange="toggleCheck('${checkId}', this.checked)">
-                        <span class="tag-display" title="${tag}">${tag}</span>
+                        <span class="tag-display">${tag}</span>
                     </td>`;
             });
             tr.innerHTML = rowHtml;
@@ -142,16 +141,16 @@
         updateProgress();
     }
 
-    function editChar(idx, val) {
-        state.chars[idx] = val.trim() || `캐릭${idx+1}`;
-        save();
-        render(); // 이름을 바꾸면 태그들도 바뀌어야 하므로 다시 렌더링
+    function editChar(id, val) {
+        const char = state.chars.find(c => c.id === id);
+        if (char) char.name = val.trim();
+        save(); render();
     }
 
-    function editKw(idx, field, val) {
-        state.keywords[idx][field] = val.trim();
-        save();
-        render(); // 키워드를 바꾸면 태그들도 바뀌어야 하므로 다시 렌더링
+    function editKw(id, field, val) {
+        const kw = state.keywords.find(k => k.id === id);
+        if (kw) kw[field] = val.trim();
+        save(); render();
     }
 
     function toggleCheck(id, val) {
@@ -160,37 +159,40 @@
     }
 
     function addColumn() {
-        state.chars.push(`캐릭${state.chars.length + 1}`);
-        save();
-        render();
+        state.chars.push({ id: Date.now(), name: 'new' });
+        save(); render();
     }
 
     function addRow() {
-        state.keywords.push({ name: 'new', desc: '설명 입력' });
-        save();
-        render();
+        state.keywords.push({ id: Date.now(), name: 'new', desc: '설명' });
+        save(); render();
     }
     
-    function removeColumn(idx) {
-        if(confirm('이 캐릭터를 삭제할까요?')) {
-            state.chars.splice(idx, 1);
-            // 삭제된 열의 체크 데이터는 자연스럽게 렌더링에서 제외됨
+    function removeColumn(id) {
+        if(confirm('삭제할까요?')) {
+            state.chars = state.chars.filter(c => c.id !== id);
             save(); render();
         }
     }
 
-    function removeRow(idx) {
-        if(confirm('이 키워드를 삭제할까요?')) {
-            state.keywords.splice(idx, 1);
+    function removeRow(id) {
+        if(confirm('삭제할까요?')) {
+            state.keywords = state.keywords.filter(k => k.id !== id);
             save(); render();
         }
     }
 
     function updateProgress() {
         const total = state.chars.length * state.keywords.length;
-        const checked = Object.values(state.checks).filter(v => v === true).length;
+        const checked = Object.entries(state.checks).filter(([key, val]) => {
+            // 현재 존재하는 행/열의 체크만 계산
+            const [kwId, charId] = key.split('-').map(Number);
+            return val === true && 
+                   state.keywords.some(k => k.id === kwId) && 
+                   state.chars.some(c => c.id === charId);
+        }).length;
+
         const percent = total > 0 ? Math.round((checked / total) * 100) : 0;
-        
         document.getElementById('progressBar').style.width = percent + '%';
         document.getElementById('percentText').innerText = percent + '%';
         document.getElementById('doneCount').innerText = checked;
@@ -198,7 +200,7 @@
     }
 
     function resetAll() {
-        if(confirm('모든 데이터가 초기화됩니다. 계속할까요?')) {
+        if(confirm('모든 데이터를 초기화할까요?')) {
             localStorage.removeItem(STORAGE_KEY);
             location.reload();
         }
@@ -206,6 +208,5 @@
 
     init();
 </script>
-
 </body>
 </html>
